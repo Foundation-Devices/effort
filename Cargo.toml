@@ -1,0 +1,9 @@
+[package]
+name = "effort"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+crypto-hashes = "0.10.0"
+rand = "0.8.5"
+tokio = { version = "1", features = ["full"] }
