@@ -14,7 +14,7 @@ pub struct PowHash {
     data: *const u8,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Challenge {
     difficulty: u32,
     fragments: Vec<[u8; 16]>,
@@ -32,7 +32,7 @@ pub fn create_challenge(difficulty: u32, num_fragments: usize) -> Challenge {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Solution {
     proofs: Vec<([u8; 16], u128)>,
 }
