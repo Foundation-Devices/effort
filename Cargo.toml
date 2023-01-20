@@ -6,4 +6,5 @@ edition = "2021"
 [dependencies]
 crypto-hashes = "0.10.0"
 rand = "0.8.5"
+serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }

@@ -2,12 +2,11 @@ extern crate core;
 
 use crypto_hashes::blake2::{Blake2b512, Digest};
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::iter;
-use std::time::Instant;
 use tokio::sync::broadcast::Sender;
 use tokio::task::JoinSet;
-
 
 #[repr(C)]
 pub struct PowHash {
@@ -15,6 +14,7 @@ pub struct PowHash {
     data: *const u8,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Challenge {
     difficulty: u32,
     fragments: Vec<[u8; 16]>,
@@ -22,7 +22,9 @@ pub struct Challenge {
 
 pub fn create_challenge(difficulty: u32, num_fragments: usize) -> Challenge {
     // Challenge fragments are 16 bytes of random data
-    let fragments = iter::from_fn(|| Some(rand::thread_rng().gen())).take(num_fragments).collect();
+    let fragments = iter::from_fn(|| Some(rand::thread_rng().gen()))
+        .take(num_fragments)
+        .collect();
 
     Challenge {
         difficulty,
@@ -30,6 +32,7 @@ pub fn create_challenge(difficulty: u32, num_fragments: usize) -> Challenge {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Solution {
     proofs: Vec<([u8; 16], u128)>,
 }
@@ -40,32 +43,23 @@ pub async fn solve_challenge(challenge: &Challenge, progress: &Sender<u128>) -> 
         set.spawn(solve_fragment(x.clone(), challenge.difficulty));
     }
 
-    let mut result = vec![];
+    let mut proofs = vec![];
     while let Some(res) = set.join_next().await {
         let solution = res.unwrap();
-        result.push(solution);
+        proofs.push(solution);
 
         // Notify of progress
         progress.send(solution.1).unwrap();
     }
 
-    Solution {
-        proofs: result
-    }
+    Solution { proofs }
 }
 
 async fn solve_fragment(fragment: [u8; 16], difficulty: u32) -> ([u8; 16], u128) {
-    let now = Instant::now();
     let mut nonce: u128 = 0;
 
     loop {
         if hash_found(fragment, difficulty, nonce) {
-            println!(
-                "Found in {:?}, after {} hashes!",
-                now.elapsed(),
-                nonce
-            );
-
             return (fragment, nonce);
         }
 
@@ -92,7 +86,6 @@ pub fn verify_solution(challenge: &Challenge, solution: &Solution) -> bool {
 
     for p in &solution.proofs {
         if !hash_found(p.0, challenge.difficulty, p.1) {
-            println!("false");
             return false;
         }
     }
@@ -100,12 +93,11 @@ pub fn verify_solution(challenge: &Challenge, solution: &Solution) -> bool {
     true
 }
 
-
 #[cfg(test)]
 mod tests {
+    use super::*;
     use tokio::runtime::Runtime;
     use tokio::sync::broadcast::{Receiver, Sender};
-    use super::*;
 
     #[tokio::test]
     async fn it_works() {
@@ -113,7 +105,8 @@ mod tests {
 
         let num_fragments = 4;
         let challenge = create_challenge(4294940000, num_fragments);
-        let (tx, mut rx): (Sender<u128>, Receiver<u128>) = tokio::sync::broadcast::channel(num_fragments);
+        let (tx, mut rx): (Sender<u128>, Receiver<u128>) =
+            tokio::sync::broadcast::channel(num_fragments);
 
         rt.spawn(async move {
             for _ in 0..num_fragments {
@@ -126,9 +119,10 @@ mod tests {
             fragments: challenge.fragments.clone(),
         };
 
-        let solution = rt.spawn(async move {
-            solve_challenge(&challenge2, &tx).await
-        }).await.unwrap();
+        let solution = rt
+            .spawn(async move { solve_challenge(&challenge2, &tx).await })
+            .await
+            .unwrap();
 
         assert_eq!(verify_solution(&challenge, &solution), true);
         std::mem::forget(rt);
